@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SignInButton, Show, UserButton, useUser } from "@clerk/nextjs";
 
 const navLinks = [
   { label: "Library", href: "/" },
@@ -12,6 +13,7 @@ const navLinks = [
 
 const Navbar = () => {
   const pathName = usePathname();
+  const { user } = useUser();
   return (
     <div className="w-full fixed z-50 bg-('--bg-primary')">
       <div className="wrapper navbar-hight py-4 flex justify-between items-center">
@@ -42,6 +44,22 @@ const Navbar = () => {
               </Link>
             );
           })}
+
+          <div className="flex gap-7.5 items-center">
+            <Show when="signed-out">
+              <SignInButton />
+            </Show>
+            <Show when="signed-in">
+              <div className="nav-user-link">
+                <UserButton />
+                {user?.firstName && (
+                  <Link href="/subscriotion" className="nav-user-name">
+                    {user.firstName}
+                  </Link>
+                )}
+              </div>
+            </Show>
+          </div>
         </nav>
       </div>
     </div>
