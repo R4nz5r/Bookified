@@ -33,7 +33,7 @@ export default function RootLayout({
         lang="en"
         className={`${ibmPlexSerif.variable} ${monaSans.variable} relative font-sans antialiased`}
       >
-        <body>
+        <body suppressHydrationWarning>
           <Navbar />
           {children}
         </body>
