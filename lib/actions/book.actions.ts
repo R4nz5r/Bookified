@@ -6,6 +6,20 @@ import { generateSlug, serializeData } from "../utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/book-segment.model";
 
+export const getAllBooks = async () => {
+  try {
+    await connectToDatabase();
+    const books = await Book.find().sort({ createdAt: -1 }).lean();
+    return { success: true, data: serializeData(books) };
+  } catch (error) {
+    console.error("Error connecting to database:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
 export const checkBookExists = async (title: string) => {
   try {
     await connectToDatabase();
@@ -23,7 +37,7 @@ export const checkBookExists = async (title: string) => {
     console.error("Error checking book exists", error);
     return {
       exists: false,
-      error: error,
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 };
@@ -42,12 +56,21 @@ export const createBook = async (data: CreateBook) => {
       };
     }
 
-    // todo: check subscription limits before creating book
-
     const book = await Book.create({ ...data, slug, totalSegments: 0 });
+
+    // ✅ ADD THIS RETURN
+    return {
+      success: true,
+      data: serializeData(book), // ensures plain object
+      alreadyExists: false,
+    };
   } catch (error) {
     console.error("Error creating book:", error);
-    return { success: false, error: error };
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 };
 
@@ -80,6 +103,9 @@ export const saveBookSegments = async (
     console.log(
       "Deleted book segments and book due to failure to save segments.",
     );
-    return { success: false, error: error };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
   }
 };
