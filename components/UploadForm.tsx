@@ -47,8 +47,8 @@ const UploadForm = () => {
       title: "",
       author: "",
       persona: "",
-      pdfFile: null,
-      coverImage: null,
+      pdfFile: undefined,
+      coverImage: undefined,
     },
   });
 
