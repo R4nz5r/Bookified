@@ -13,10 +13,10 @@ const VapiControls = ({ book }: { book: IBook }) => {
     messages,
     currentMessage,
     currentUserMessage,
-    duration,
+    // duration,
     start,
     stop,
-    clearErrors,
+    // clearErrors,
   } = useVapi(book);
 
   return (

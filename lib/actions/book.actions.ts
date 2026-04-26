@@ -6,7 +6,6 @@ import { escapeRegex, generateSlug, serializeData } from "../utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/book-segment.model";
 import mongoose from "mongoose";
-import { revalidatePath } from "next/cache";
 
 export const getAllBooks = async () => {
   try {
@@ -27,6 +26,7 @@ export const checkBookExists = async (title: string) => {
     await connectToDatabase();
     const slug = generateSlug(title);
     const existingBook = await Book.findOne({ slug }).lean();
+
     if (existingBook) {
       return {
         exists: true,
@@ -50,6 +50,7 @@ export const createBook = async (data: CreateBook) => {
     const slug = generateSlug(data.title);
 
     const existingBook = await Book.findOne({ slug }).lean();
+
     if (existingBook) {
       return {
         success: true,
@@ -58,12 +59,15 @@ export const createBook = async (data: CreateBook) => {
       };
     }
 
-    const book = await Book.create({ ...data, slug, totalSegments: 0 });
-    revalidatePath("/");
-    // ✅ ADD THIS RETURN
+    const book = await Book.create({
+      ...data,
+      slug,
+      totalSegments: 0,
+    });
+
     return {
       success: true,
-      data: serializeData(book), // ensures plain object
+      data: serializeData(book),
       alreadyExists: false,
     };
   } catch (error) {
@@ -84,6 +88,7 @@ export const saveBookSegments = async (
   try {
     await connectToDatabase();
     console.log("Saving book segments...");
+
     const segmentsToInsert = segments.map(
       ({ text, segmentIndex, pageNumber, wordCount }) => ({
         clerkId,
@@ -94,17 +99,26 @@ export const saveBookSegments = async (
         wordCount,
       }),
     );
+
     await BookSegment.insertMany(segmentsToInsert);
-    await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
+
+    await Book.findByIdAndUpdate(bookId, {
+      totalSegments: segments.length,
+    });
+
     console.log("Book segment saved successfully.");
-    return { success: true, data: { segmentsCreated: segments.length } };
+
+    return {
+      success: true,
+      data: { segmentsCreated: segments.length },
+    };
   } catch (error) {
     console.error("Error saving book segments:", error);
+
+    // rollback
     await BookSegment.deleteMany({ bookId, clerkId });
     await Book.findByIdAndDelete(bookId);
-    console.log(
-      "Deleted book segments and book due to failure to save segments.",
-    );
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -128,6 +142,7 @@ export const getBookBySlug = async (slug: string) => {
     };
   } catch (error) {
     console.error("Error fetching book by slug", error);
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -147,8 +162,9 @@ export const searchBookSegments = async (
 
     const bookObjectId = new mongoose.Types.ObjectId(bookId);
 
-    // Try MongoDB text search first (requires text index)
     let segments: Record<string, unknown>[] = [];
+
+    // 🔍 Try text search
     try {
       segments = await BookSegment.find({
         bookId: bookObjectId,
@@ -159,20 +175,16 @@ export const searchBookSegments = async (
         .limit(limit)
         .lean();
     } catch {
-      // Text index may not exist — fall through to regex fallback
       segments = [];
     }
 
-    // Fallback: regex search matching ANY keyword
+    // 🔁 Fallback regex search
     if (segments.length === 0) {
       const keywords = query.split(/\s+/).filter((k) => k.length > 2);
       const pattern = keywords.map(escapeRegex).join("|");
 
       if (keywords.length === 0) {
-        return {
-          success: true,
-          data: [],
-        };
+        return { success: true, data: [] };
       }
 
       segments = await BookSegment.find({
@@ -193,6 +205,7 @@ export const searchBookSegments = async (
     };
   } catch (error) {
     console.error("Error searching segments:", error);
+
     return {
       success: false,
       error: (error as Error).message,
