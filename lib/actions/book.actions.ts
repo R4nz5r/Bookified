@@ -167,6 +167,13 @@ export const searchBookSegments = async (
       const keywords = query.split(/\s+/).filter((k) => k.length > 2);
       const pattern = keywords.map(escapeRegex).join("|");
 
+      if(keywords.length === 0) {
+        return {
+          success: true,
+          data: [],
+        };
+      }
+
       segments = await BookSegment.find({
         bookId: bookObjectId,
         content: { $regex: pattern, $options: "i" },
