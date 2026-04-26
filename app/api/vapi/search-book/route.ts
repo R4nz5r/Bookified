@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Vapi search-book error:", error);
     return NextResponse.json({
-      results: [{ result: "Error processing request" }],
+      results: [{ result: "Error processing request " }],
     });
   }
 }

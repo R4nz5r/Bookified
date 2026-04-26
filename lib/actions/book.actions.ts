@@ -113,7 +113,7 @@ export const saveBookSegments = async (
       data: { segmentsCreated: segments.length },
     };
   } catch (error) {
-    console.error("Error saving book segments:", error);
+    console.error("Error book saving segments:", error);
 
     // rollback
     await BookSegment.deleteMany({ bookId, clerkId });
