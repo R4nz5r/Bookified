@@ -134,8 +134,12 @@ const UploadForm = () => {
         fileSize: pdfFile.size,
       });
 
-      if (!book?.success || !book.data?._id) {
-        throw new Error("Failed to upload book.");
+      if (!book?.success) {
+        toast.error((book.error as string) || "Failed to upload book.");
+        if (book.isBillingError) {
+          router.push("/subscriptions");
+        }
+        return;
       }
 
       if (book.alreadyExists) {

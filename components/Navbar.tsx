@@ -9,6 +9,7 @@ import { SignInButton, Show, UserButton, useUser } from "@clerk/nextjs";
 const navLinks = [
   { label: "Library", href: "/" },
   { label: "Add New", href: "/books/new" },
+  { label: "Pricing", href: "/subscriptions" },
 ];
 
 const Navbar = () => {
@@ -53,7 +54,7 @@ const Navbar = () => {
               <div className="nav-user-link">
                 <UserButton />
                 {user?.firstName && (
-                  <Link href="/subscriotion" className="nav-user-name">
+                  <Link href="/subscriptions" className="nav-user-name">
                     {user.firstName}
                   </Link>
                 )}
