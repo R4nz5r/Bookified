@@ -193,6 +193,13 @@
   .auth-wrapper {
     @apply max-w-7xl px-5 mx-auto w-full min-h-screen pt-20 flex flex-col items-center justify-center py-10;
   }
+  .sign-in-page-container {
+    @apply flex items-center justify-center px-4 py-10 w-full bg-background;
+    min-height: calc(100vh - var(--navbar-height));
+  }
+  .sign-in-card-wrapper {
+    @apply w-full max-w-[420px];
+  }
   .auth-shadow {
     @apply rounded-2xl bg-[var(--accent-light)];
   }
