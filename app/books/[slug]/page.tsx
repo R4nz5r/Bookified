@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+import { redirect } from "next/navigation"; 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft} from "lucide-react";
+
 import { getBookBySlug } from "@/lib/actions/book.actions";
 import VapiControls from "@/components/VapiControls";
 
@@ -31,9 +32,7 @@ export default async function BookDetailsPage({
         <ArrowLeft className="size-6 text-[#212a3b]" />
       </Link>
 
-      
-        {/* transcript */}
-        <VapiControls book={book} />
+      <VapiControls book={book} />
     </div>
   );
 }
