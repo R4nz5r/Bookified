@@ -60,6 +60,7 @@ export function useVapi(book: IBook) {
   const [currentMessage, setCurrentMessage] = useState("");
   const [currentUserMessage, setCurrentUserMessage] = useState("");
   const [duration, setDuration] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   const [limitError, setLimitError] = useState<string | null>(null);
   const [isBillingError, setIsBillingError] = useState(false);
 
@@ -74,16 +75,63 @@ export function useVapi(book: IBook) {
     : 15 * 60;
   const maxDurationRef = useLatestRef(maxDurationSeconds);
   const durationRef = useLatestRef(duration);
+  const messagesRef = useLatestRef(messages);
   const voice = book.persona || DEFAULT_VOICE;
 
   // Set up Vapi event listeners
   useEffect(() => {
+    // Suppress Daily.co / WebRTC room ejection errors when teardown occurs
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = String(
+        event?.reason?.message ||
+          event?.reason?.msg ||
+          event?.reason ||
+          "",
+      ).toLowerCase();
+
+      if (
+        reason.includes("meeting ended") ||
+        reason.includes("meeting has ended") ||
+        reason.includes("ejection") ||
+        reason.includes("left the call")
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
     const handlers = {
       "call-start": () => {
         isStoppingRef.current = false;
+        setIsMuted(false);
         setStatus("starting"); // AI speaks first, wait for it
         setCurrentMessage("");
         setCurrentUserMessage("");
+
+        // If resuming a session with previous messages, inject context into Vapi's active session
+        if (messagesRef.current && messagesRef.current.length > 0) {
+          const recentMsgs = messagesRef.current.slice(-10);
+          const historySummary = recentMsgs
+            .map(
+              (m) =>
+                `${m.role === "user" ? "Reader" : "Assistant"}: ${m.content}`,
+            )
+            .join("\n");
+
+          try {
+            getVapi().send({
+              type: "add-message",
+              message: {
+                role: "system",
+                content: `You are continuing an ongoing conversation with this reader about the book "${book.title}" by ${book.author}. The reader previously paused and has now resumed the call. Here is the transcript of what was discussed immediately before resuming:\n\n${historySummary}\n\nContinue naturally from this context. Do not repeat introductions or re-ask if they have read the book.`,
+              },
+              triggerResponseEnabled: false,
+            });
+          } catch (e) {
+            console.warn("Could not inject context into Vapi session:", e);
+          }
+        }
 
         // Start duration timer
         startTimeRef.current = Date.now();
@@ -97,7 +145,8 @@ export function useVapi(book: IBook) {
 
             // Check duration limit
             if (newDuration >= maxDurationRef.current) {
-              getVapi().stop();
+              isStoppingRef.current = true;
+              getVapi().stop().catch(() => {});
               setLimitError(
                 `Session time limit (${Math.floor(
                   maxDurationRef.current / SECONDS_PER_MINUTE,
@@ -109,7 +158,7 @@ export function useVapi(book: IBook) {
       },
 
       "call-end": () => {
-        // Don't reset isStoppingRef here - delayed events may still fire
+        setIsMuted(false);
         setStatus("idle");
         setCurrentMessage("");
         setCurrentUserMessage("");
@@ -191,10 +240,9 @@ export function useVapi(book: IBook) {
         }
       },
 
-      error: (error: Error) => {
-        console.error("Vapi error:", error);
-        // Don't reset isStoppingRef here - delayed events may still fire
+      error: (error: any) => {
         setStatus("idle");
+        setIsMuted(false);
         setCurrentMessage("");
         setCurrentUserMessage("");
 
@@ -213,8 +261,51 @@ export function useVapi(book: IBook) {
           sessionIdRef.current = null;
         }
 
-        // Show user-friendly error message
-        const errorMessage = error.message?.toLowerCase() || "";
+        startTimeRef.current = null;
+
+        // If the user intentionally stopped the call, do not treat as an error or log
+        if (isStoppingRef.current) {
+          return;
+        }
+
+        // Extract error message from various possible error object shapes
+        const errObj = error?.error || error;
+        const errorMessage = String(
+          errObj?.msg ||
+            errObj?.message?.msg ||
+            errObj?.message ||
+            errObj?.error?.msg ||
+            error?.message ||
+            error?.errorMsg ||
+            errObj?.errorMsg ||
+            "",
+        ).toLowerCase();
+
+        const errType = String(
+          errObj?.type ||
+            errObj?.error?.type ||
+            error?.type ||
+            "",
+        ).toLowerCase();
+
+        // Normal meeting completion or ejection after teardown should not trigger error alerts or logs
+        if (
+          !errorMessage ||
+          errorMessage === "{}" ||
+          errorMessage === "[object object]" ||
+          errorMessage.includes("meeting has ended") ||
+          errorMessage.includes("meeting ended") ||
+          errorMessage.includes("ejected") ||
+          errorMessage.includes("left the call") ||
+          errType === "ejected" ||
+          (errType === "daily-error" && errorMessage.includes("meeting"))
+        ) {
+          return;
+        }
+
+        console.error("Vapi error:", error);
+
+        // Show user-friendly error message for genuine errors
         if (
           errorMessage.includes("timeout") ||
           errorMessage.includes("silence")
@@ -231,11 +322,9 @@ export function useVapi(book: IBook) {
           );
         } else {
           setLimitError(
-            "Session ended unexpectedly. Click the mic to start again.",
+            "Session ended. Click the mic to start again.",
           );
         }
-
-        startTimeRef.current = null;
       },
     };
 
@@ -245,9 +334,14 @@ export function useVapi(book: IBook) {
     });
 
     return () => {
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
       // End active session on unmount
       if (sessionIdRef.current) {
-        getVapi().stop();
+        try {
+          getVapi().stop().catch(() => {});
+        } catch {
+          // Ignore
+        }
         endVoiceSession(sessionIdRef.current, durationRef.current).catch(
           (err) =>
             console.error("Failed to end voice session on unmount:", err),
@@ -286,10 +380,25 @@ export function useVapi(book: IBook) {
       }
 
       sessionIdRef.current = result.sessionId || null;
-      // Note: Server-returned maxDurationMinutes is informational only
-      // The actual limit is enforced by useLatestRef(limits.maxSessionMinutes * 60)
 
-      const firstMessage = `Hey, good to meet you. Quick question before we dive in - have you actually read ${book.title} yet, or are we starting fresh?`;
+      const prevMsgs =
+        messagesRef.current && messagesRef.current.length > 0
+          ? messagesRef.current
+          : messages;
+      const hasHistory = prevMsgs.length > 0;
+      const firstMessage = hasHistory
+        ? `Welcome back! Let's pick up where we left off with ${book.title}. What would you like to explore next?`
+        : `Hey, good to meet you. Quick question before we dive in - have you actually read ${book.title} yet, or are we starting fresh?`;
+
+      const recentContext = hasHistory
+        ? prevMsgs
+            .slice(-8)
+            .map(
+              (m) =>
+                `${m.role === "user" ? "Reader" : "Assistant"}: ${m.content}`,
+            )
+            .join("\n")
+        : "";
 
       await getVapi().start(ASSISTANT_ID, {
         firstMessage,
@@ -297,6 +406,7 @@ export function useVapi(book: IBook) {
           title: book.title,
           author: book.author,
           bookId: book._id,
+          ...(recentContext ? { previousConversation: recentContext } : {}),
         },
         voice: {
           provider: "11labs" as const,
@@ -313,11 +423,28 @@ export function useVapi(book: IBook) {
       setStatus("idle");
       setLimitError("Failed to start voice session. Please try again.");
     }
-  }, [book._id, book.title, book.author, voice, userId]);
+  }, [book._id, book.title, book.author, voice, userId, messages, messagesRef]);
+
+  const toggleMute = useCallback(() => {
+    try {
+      const v = getVapi();
+      const nextMuted = !isMuted;
+      v.setMuted(nextMuted);
+      setIsMuted(nextMuted);
+    } catch (e) {
+      console.error("Failed to toggle mute:", e);
+    }
+  }, [isMuted]);
 
   const stop = useCallback(() => {
     isStoppingRef.current = true;
-    getVapi().stop();
+    setStatus("idle");
+    setIsMuted(false);
+    try {
+      getVapi().stop().catch(() => {});
+    } catch {
+      // Ignore
+    }
   }, []);
 
   const clearError = useCallback(() => {
@@ -331,15 +458,11 @@ export function useVapi(book: IBook) {
     status === "thinking" ||
     status === "speaking";
 
-  // Calculate remaining time
-  // const maxDurationSeconds = limits.maxSessionMinutes * SECONDS_PER_MINUTE;
-  // const remainingSeconds = Math.max(0, maxDurationSeconds - duration);
-  // const showTimeWarning =
-  //     isActive && remainingSeconds <= TIME_WARNING_THRESHOLD && remainingSeconds > 0;
-
   return {
     status,
     isActive,
+    isMuted,
+    toggleMute,
     messages,
     currentMessage,
     currentUserMessage,
@@ -350,9 +473,6 @@ export function useVapi(book: IBook) {
     isBillingError,
     maxDurationSeconds,
     clearError,
-    // maxDurationSeconds,
-    // remainingSeconds,
-    // showTimeWarning,
   };
 }
 

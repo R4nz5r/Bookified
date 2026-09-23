@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, MicOff } from "lucide-react";
+import { Mic, MicOff, PhoneOff } from "lucide-react";
 import useVapi from "@/hooks/useVapi";
 import { IBook } from "@/types";
 import Image from "next/image";
@@ -14,6 +14,8 @@ const VapiControls = ({ book }: { book: IBook }) => {
   const {
     status,
     isActive,
+    isMuted,
+    toggleMute,
     messages,
     currentMessage,
     currentUserMessage,
@@ -32,8 +34,6 @@ const VapiControls = ({ book }: { book: IBook }) => {
       toast.error(limitError);
       if (isBillingError) {
         router.push("/subscriptions");
-      } else {
-        router.push("/");
       }
       clearError();
     }
@@ -46,6 +46,9 @@ const VapiControls = ({ book }: { book: IBook }) => {
   };
 
   const getStatusDisplay = () => {
+    if (isActive && isMuted) {
+      return { label: "Muted", color: "bg-amber-500" };
+    }
     switch (status) {
       case "connecting":
         return { label: "Connecting...", color: "vapi-status-dot-connecting" };
@@ -79,18 +82,44 @@ const VapiControls = ({ book }: { book: IBook }) => {
               priority
             />
             <div className="vapi-mic-wrapper relative">
-              {isActive && (status === "speaking" || status === "thinking") && (
+              {isActive && !isMuted && (status === "speaking" || status === "thinking") && (
                 <div className="absolute inset-0 rounded-full bg-white animate-ping opacity-75" />
               )}
               <button
-                onClick={isActive ? stop : start}
+                type="button"
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  if (isActive) {
+                    stop();
+                  } else {
+                    start();
+                  }
+                }}
                 disabled={status === "connecting"}
-                className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 ${isActive ? "vapi-mic-btn-active" : "vapi-mic-btn-inactive"}`}
+                aria-label={
+                  !isActive
+                    ? "Start voice call"
+                    : "End voice call"
+                }
+                title={
+                  !isActive
+                    ? "Start voice call"
+                    : "Click to stop voice call"
+                }
+                className={`vapi-mic-btn shadow-md !w-[60px] !h-[60px] z-10 transition-all ${
+                  !isActive
+                    ? "vapi-mic-btn-inactive"
+                    : isMuted
+                    ? "!bg-amber-500 hover:!bg-amber-600"
+                    : "vapi-mic-btn-active"
+                }`}
               >
-                {isActive ? (
-                  <Mic className="size-7 text-white" />
-                ) : (
+                {!isActive ? (
                   <MicOff className="size-7 text-[#212a3b]" />
+                ) : isMuted ? (
+                  <MicOff className="size-7 text-white" />
+                ) : (
+                  <Mic className="size-7 text-white" />
                 )}
               </button>
             </div>
@@ -122,6 +151,49 @@ const VapiControls = ({ book }: { book: IBook }) => {
                   {formatDuration(maxDurationSeconds)}
                 </span>
               </div>
+
+              {isActive && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      toggleMute();
+                    }}
+                    className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-[4px] shadow-sm transition-all cursor-pointer ${
+                      isMuted
+                        ? "bg-amber-500 hover:bg-amber-600 text-white"
+                        : "bg-white/80 hover:bg-white text-[#212a3b] border border-black/10"
+                    }`}
+                    title={isMuted ? "Click to unmute microphone" : "Click to mute microphone"}
+                  >
+                    {isMuted ? (
+                      <>
+                        <MicOff className="size-3.5" />
+                        <span>Unmute</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="size-3.5" />
+                        <span>Mute</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      stop();
+                    }}
+                    className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-[4px] shadow-sm transition-all cursor-pointer"
+                    title="End voice conversation"
+                  >
+                    <PhoneOff className="size-3.5" />
+                    <span>End Call</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
