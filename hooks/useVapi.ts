@@ -28,7 +28,6 @@ export function useLatestRef<T>(value: T) {
 const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
-const TIME_WARNING_THRESHOLD = 60; // Show warning when this many seconds remain
 
 let vapi: InstanceType<typeof Vapi>;
 function getVapi() {
@@ -240,7 +239,8 @@ export function useVapi(book: IBook) {
         }
       },
 
-      error: (error: any) => {
+      error: (error: unknown) => {
+        console.error("Vapi call error:", error);
         setStatus("idle");
         setIsMuted(false);
         setCurrentMessage("");
@@ -268,24 +268,26 @@ export function useVapi(book: IBook) {
           return;
         }
 
-        // Extract error message from various possible error object shapes
-        const errObj = error?.error || error;
-        const errorMessage = String(
-          errObj?.msg ||
-            errObj?.message?.msg ||
-            errObj?.message ||
-            errObj?.error?.msg ||
-            error?.message ||
-            error?.errorMsg ||
-            errObj?.errorMsg ||
-            "",
+        const err = (typeof error === "object" && error !== null ? error : {}) as Record<string, unknown>;
+        const innerErr = typeof err.error === "object" && err.error !== null ? (err.error as Record<string, unknown>) : null;
+        const getStringProp = (obj: Record<string, unknown> | null, key: string) => {
+          const val = obj?.[key];
+          return typeof val === "string" ? val : "";
+        };
+
+        const errorMessage = (
+          getStringProp(innerErr, "msg") ||
+          getStringProp(innerErr, "message") ||
+          getStringProp(err, "message") ||
+          getStringProp(err, "msg") ||
+          getStringProp(err, "errorMsg") ||
+          ""
         ).toLowerCase();
 
-        const errType = String(
-          errObj?.type ||
-            errObj?.error?.type ||
-            error?.type ||
-            "",
+        const errType = (
+          getStringProp(innerErr, "type") ||
+          getStringProp(err, "type") ||
+          ""
         ).toLowerCase();
 
         // Normal meeting completion or ejection after teardown should not trigger error alerts or logs
@@ -342,7 +344,9 @@ export function useVapi(book: IBook) {
         } catch {
           // Ignore
         }
-        endVoiceSession(sessionIdRef.current, durationRef.current).catch(
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const currentDuration = durationRef.current;
+        endVoiceSession(sessionIdRef.current, currentDuration).catch(
           (err) =>
             console.error("Failed to end voice session on unmount:", err),
         );
@@ -354,6 +358,7 @@ export function useVapi(book: IBook) {
       });
       if (timerRef.current) clearInterval(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const start = useCallback(async () => {

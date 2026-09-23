@@ -154,11 +154,20 @@ export const saveBookSegments = async (
   bookId: string,
   clerkId: string,
   segments: TextSegment[],
+  isFinalBatch: boolean = true,
+  totalCount?: number,
 ) => {
   try {
     await connectToDatabase();
 
-    console.log("Saving book segments...");
+    const { auth } = await import("@clerk/nextjs/server");
+    const { userId } = await auth();
+
+    if (!userId || userId !== clerkId) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    console.log(`Saving ${segments.length} book segments...`);
 
     const segmentsToInsert = segments.map(
       ({ text, segmentIndex, pageNumber, wordCount }) => ({
@@ -171,9 +180,15 @@ export const saveBookSegments = async (
       }),
     );
 
-    await BookSegment.insertMany(segmentsToInsert);
+    if (segmentsToInsert.length > 0) {
+      await BookSegment.insertMany(segmentsToInsert, { ordered: false });
+    }
 
-    await Book.findByIdAndUpdate(bookId, { totalSegments: segments.length });
+    if (isFinalBatch) {
+      const finalTotal =
+        totalCount ?? (await BookSegment.countDocuments({ bookId }));
+      await Book.findByIdAndUpdate(bookId, { totalSegments: finalTotal });
+    }
 
     console.log("Book segments saved successfully.");
 
@@ -186,7 +201,7 @@ export const saveBookSegments = async (
 
     return {
       success: false,
-      error: e,
+      error: e instanceof Error ? e.message : "Error saving segments",
     };
   }
 };

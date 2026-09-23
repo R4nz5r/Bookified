@@ -4,7 +4,7 @@ import dns from "node:dns";
 // Configure reliable DNS servers to prevent querySrv ECONNREFUSED on MongoDB Atlas SRV URLs
 try {
   dns.setServers(["8.8.8.8", "1.1.1.1"]);
-} catch (e) {
+} catch {
   // Fall back silently if not supported
 }
 

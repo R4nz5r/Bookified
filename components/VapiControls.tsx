@@ -74,7 +74,7 @@ const VapiControls = ({ book }: { book: IBook }) => {
         <div className="vapi-header-card">
           <div className="vapi-cover-wrapper">
             <Image
-              src={book.coverURL || "/images/book-placeholder.png"}
+              src={book.coverURL || "/assets/book-cover.svg"}
               alt={book.title}
               width={120}
               height={180}

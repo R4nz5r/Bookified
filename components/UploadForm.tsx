@@ -149,15 +149,23 @@ const UploadForm = () => {
         return;
       }
 
-      // ✅ Save Segments
-      const segments = await saveBookSegments(
-        book.data._id,
-        userId,
-        parsedPDF.content,
-      );
+      // ✅ Save Segments in batches of 100 to stay safely within serverless payload limits
+      const totalSegments = parsedPDF.content.length;
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < totalSegments; i += CHUNK_SIZE) {
+        const chunk = parsedPDF.content.slice(i, i + CHUNK_SIZE);
+        const isFinalBatch = i + CHUNK_SIZE >= totalSegments;
+        const segmentResult = await saveBookSegments(
+          book.data._id,
+          userId,
+          chunk,
+          isFinalBatch,
+          totalSegments,
+        );
 
-      if (!segments?.success) {
-        throw new Error("Failed to save book segments.");
+        if (!segmentResult?.success) {
+          throw new Error("Failed to save book segments.");
+        }
       }
 
       // ✅ Success

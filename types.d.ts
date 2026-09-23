@@ -117,7 +117,7 @@ export interface FileUploadFieldProps<T extends FieldValues> {
   hint: string;
 }
 
-import { PLANS, PlanType } from "@/lib/subscription-constants";
+import { PlanType } from "@/lib/subscription-constants";
 
 export interface SessionCheckResult {
   allowed: boolean;

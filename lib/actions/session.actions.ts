@@ -11,6 +11,16 @@ export const startVoiceSession = async (
   try {
     await connectToDatabase();
 
+    const { auth } = await import("@clerk/nextjs/server");
+    const { userId } = await auth();
+
+    if (!userId || userId !== clerkId) {
+      return {
+        success: false,
+        error: "Unauthorized: User not authenticated",
+      };
+    }
+
     // Limits/Plan to see whether a session is allowed.
     const { getUserPlan } = await import("@/lib/subscription.server");
     const { PLAN_LIMITS, getCurrentBillingPeriodStart } =
